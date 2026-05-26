@@ -1,8 +1,10 @@
+import 'dotenv/config';
 import express from 'express';
 import { ApolloServer } from '@apollo/server';
 import { expressMiddleware } from '@as-integrations/express5';
 import cors from 'cors';
-import axios from 'axios';
+import schema from './schema.js';
+import resolvers from './resolvers.js';
 
 async function bootstrap() {
   const app = express();
@@ -11,26 +13,10 @@ async function bootstrap() {
   app.use(express.json());
 
   const server = new ApolloServer({
-    typeDefs: `type Todo {
-      id: ID!
-      title: String!
-      completed: Boolean!
-    }
-
-    type Query {
-      getTodos: [Todo]
-    }`,
-    resolvers: {
-      Query: {
-        getTodos: () =>
-          axios
-            .get('https://jsonplaceholder.typicode.com/todos')
-            .then((res) => res.data),
-      },
-    },
+    typeDefs: schema,
+    resolvers
   });
   await server.start();
-
   app.use('/graphql', expressMiddleware(server));
 
   const PORT = Number(process.env.PORT) || 3000;
