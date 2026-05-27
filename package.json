@@ -7,7 +7,7 @@
   "license": "UNLICENSED",
     "type": "module",
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && cp -r generated dist/ && node scripts/fix-generated-esm-imports.mjs",
       "start": "node dist/src/main.js",
       "start:dev": "npm run build && node dist/src/main.js",
     "lint": "eslint \"src/**/*.ts\" --fix",

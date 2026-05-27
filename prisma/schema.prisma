@@ -16,4 +16,13 @@ model User {
   id    Int    @id @default(autoincrement())
   name  String
   email String @unique
+  jobs  Job[]
+}
+
+model Job {
+  id          Int    @id @default(autoincrement())
+  title       String
+  description String?
+  userId      Int?
+  user        User?  @relation(fields: [userId], references: [id])
 }

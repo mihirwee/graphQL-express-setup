@@ -8,8 +8,15 @@ const prisma = new PrismaClient({
 export default {
   Query: {
     users: async () => {
-      return prisma.user.findMany();
+      return prisma.user.findMany({
+        include: { jobs: true },
+      });
     },
+
+    jobs: async () => {
+      return prisma.job.findMany();
+    },
+ 
     user: async (_, args) => {
       const where = {
         ...(args.id ? { id: Number(args.id) } : {}),
@@ -21,7 +28,18 @@ export default {
         return null;
       }
 
-      return prisma.user.findFirst({ where });
+      return prisma.user.findFirst({
+        where,
+        include: { jobs: true },
+      });
+    },
+  },
+
+  Job: {
+    user: async (parent) => {
+      return prisma.user.findUnique({
+        where: { id: parent.userId },
+      });
     },
   },
 
@@ -42,11 +60,38 @@ export default {
 
 
     deleteUserByName: async (_, args) => {
+      // First, find all users with this name to get their IDs
+      const usersToDelete = await prisma.user.findMany({
+        where: { name: args.name },
+      });
+
+      const userIds = usersToDelete.map((user) => user.id);
+
+      // Set userId to null for all jobs associated with these users
+      if (userIds.length > 0) {
+        await prisma.job.updateMany({
+          where: { userId: { in: userIds } },
+          data: { userId: null },
+        });
+      }
+
+      // Now delete the users
       const result = await prisma.user.deleteMany({
         where: { name: args.name },
       });
 
       return result.count;
     },
+
+    createJob: async (_, args) => {
+      const { title, description, userId } = args;
+      return prisma.job.create({
+        data: {
+          title,
+          description,
+          userId: Number(userId),
+        },
+      });
+    }
   },
 };
