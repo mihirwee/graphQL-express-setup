@@ -11,6 +11,7 @@ export default `
     users: [User!]
     jobs: [Job!]
     user(id: ID, email: String, name: String): User
+    jobsByUser(userId: ID!): [Job!]
   }
 
   type Mutation {

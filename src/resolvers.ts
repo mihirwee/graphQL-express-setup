@@ -16,7 +16,7 @@ export default {
     jobs: async () => {
       return prisma.job.findMany();
     },
- 
+
     user: async (_, args) => {
       const where = {
         ...(args.id ? { id: Number(args.id) } : {}),
@@ -31,6 +31,12 @@ export default {
       return prisma.user.findFirst({
         where,
         include: { jobs: true },
+      });
+    },
+
+    jobsByUser: (_, { userId }) => {
+      return prisma.job.findMany({
+        where: { userId: Number(userId) },
       });
     },
   },
@@ -57,7 +63,6 @@ export default {
         data,
       });
     },
-
 
     deleteUserByName: async (_, args) => {
       // First, find all users with this name to get their IDs
@@ -92,6 +97,6 @@ export default {
           userId: Number(userId),
         },
       });
-    }
+    },
   },
 };
