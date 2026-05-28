@@ -4,6 +4,7 @@ export default `
     id: ID!
     name: String!
     email: String
+    password: String
     jobs: [Job!]
   }
 
@@ -19,7 +20,10 @@ export default `
     deleteUserByName(name: String!): Int!
     updateUser(id: ID, name: String, email: String): User!
     createJob(title: String!, description: String, userId: ID!): Job!
-  }
+    register(name: String!, email: String!, password: String!): AuthPayload!
+    login(email: String!, password: String!): AuthPayload!
+    }
+  
 
   type Job{
   id: ID!
@@ -27,4 +31,9 @@ export default `
   description: String
   user: User!
   }
+
+  type AuthPayload {
+    token: String! 
+    user: User!
+    }
 `;

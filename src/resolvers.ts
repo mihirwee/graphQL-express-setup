@@ -1,5 +1,9 @@
 import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from '../generated/prisma/client.js';
+import bcrypt from 'bcryptjs';
+import jwt from 'jsonwebtoken';
+
+const SECRET = process.env.MY_SECRET;
 
 const prisma = new PrismaClient({
   adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL }),
@@ -13,8 +17,14 @@ export default {
       });
     },
 
-    jobs: async () => {
-      return prisma.job.findMany();
+    jobs: async (_, __, context) => {
+      console.log('Context in jobs resolver:', context);
+      if (!context.userId) {
+        throw new Error('Unauthorized alert!!!!!!!!!!');
+      }
+      return prisma.job.findMany({
+        where: { userId: Number(context.userId) },
+      });
     },
 
     user: async (_, args) => {
@@ -88,15 +98,51 @@ export default {
       return result.count;
     },
 
-    createJob: async (_, args) => {
-      const { title, description, userId } = args;
+    createJob: async (_, args, context) => {
+      const { title, description } = args;
+
+      if (!context.userId) {
+        throw new Error('Unauthorized alert!!!!!!!!!!');
+      }
       return prisma.job.create({
         data: {
           title,
           description,
-          userId: Number(userId),
+          userId: Number(context.userId),
         },
       });
+    },
+    register: async (_, { name, email, password }) => {
+      const hashed = await bcrypt.hash(password, 10);
+
+      const user = await prisma.user.create({
+        data: { name, email, password: hashed },
+      });
+
+      const token = jwt.sign({ userId: user.id }, SECRET);
+
+      return { token, user };
+    },
+
+    login: async (_, { email, password }) => {
+      const user = await prisma.user.findUnique({
+        where: { email },
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          password: true,
+        },
+      });
+      if (!user) throw new Error('User not found');
+      if (!user.password) throw new Error('Password not set');
+
+      const valid = await bcrypt.compare(password, user.password);
+      if (!valid) throw new Error('Invalid password');
+
+      const token = jwt.sign({ userId: user.id }, SECRET);
+
+      return { token, user };
     },
   },
 };
