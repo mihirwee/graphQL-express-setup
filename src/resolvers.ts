@@ -1,20 +1,14 @@
-import { PrismaPg } from '@prisma/adapter-pg';
-import { PrismaClient } from '../generated/prisma/client.js';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
+import { dataStore } from './data/store.js';
+import { currentUser } from './decorators/currentUser.js';
 
 const SECRET = process.env.MY_SECRET;
-
-const prisma = new PrismaClient({
-  adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL }),
-});
 
 export default {
   Query: {
     users: async () => {
-      return prisma.user.findMany({
-        include: { jobs: true },
-      });
+      return dataStore.getUsers();
     },
 
     jobs: async (_, __, context) => {
@@ -22,80 +16,52 @@ export default {
       if (!context.userId) {
         throw new Error('Unauthorized alert!!!!!!!!!!');
       }
-      return prisma.job.findMany({
-        where: { userId: Number(context.userId) },
-      });
+      return dataStore.getJobsForUser(String(context.userId));
     },
 
     user: async (_, args) => {
-      const where = {
-        ...(args.id ? { id: Number(args.id) } : {}),
-        ...(args.email ? { email: args.email } : {}),
-        ...(args.name ? { name: args.name } : {}),
-      };
-
-      if (Object.keys(where).length === 0) {
-        return null;
-      }
-
-      return prisma.user.findFirst({
-        where,
-        include: { jobs: true },
+      return dataStore.getUserByFilters({
+        id: args.id ? String(args.id) : undefined,
+        email: args.email,
+        name: args.name,
       });
     },
 
-    jobsByUser: (_, { userId }) => {
-      return prisma.job.findMany({
-        where: { userId: Number(userId) },
-      });
-    },
+    jobsByUser: currentUser('userId', (_, { userId }) => {
+      return dataStore.getJobsByUser(String(userId));
+    }),
   },
 
   Job: {
     user: async (parent) => {
-      return prisma.user.findUnique({
-        where: { id: parent.userId },
-      });
+      if (!parent.userId) {
+        throw new Error('Job is missing userId');
+      }
+
+      const user = await dataStore.getUserById(String(parent.userId));
+      if (!user) {
+        throw new Error(`User not found for job ${String(parent.id)}`);
+      }
+
+      return user;
     },
   },
 
   Mutation: {
     createUser: async (_, args) => {
-      return prisma.user.create({
-        data: args,
+      return dataStore.createUser({
+        name: args.name,
+        email: args.email,
       });
     },
 
-    updateUser: async (_, args) => {
+    updateUser: currentUser('id', async (_, args) => {
       const { id, ...data } = args;
-      return prisma.user.update({
-        where: { id: Number(id) },
-        data,
-      });
-    },
+      return dataStore.updateUser(String(id), data);
+    }),
 
     deleteUserByName: async (_, args) => {
-      // First, find all users with this name to get their IDs
-      const usersToDelete = await prisma.user.findMany({
-        where: { name: args.name },
-      });
-
-      const userIds = usersToDelete.map((user) => user.id);
-
-      // Set userId to null for all jobs associated with these users
-      if (userIds.length > 0) {
-        await prisma.job.updateMany({
-          where: { userId: { in: userIds } },
-          data: { userId: null },
-        });
-      }
-
-      // Now delete the users
-      const result = await prisma.user.deleteMany({
-        where: { name: args.name },
-      });
-
-      return result.count;
+      return dataStore.deleteUserByName(args.name);
     },
 
     createJob: async (_, args, context) => {
@@ -104,42 +70,46 @@ export default {
       if (!context.userId) {
         throw new Error('Unauthorized alert!!!!!!!!!!');
       }
-      return prisma.job.create({
-        data: {
-          title,
-          description,
-          userId: Number(context.userId),
-        },
+
+      const user = await dataStore.getUserById(String(context.userId));
+      if (!user) {
+        throw new Error('Authenticated user not found');
+      }
+
+      return dataStore.createJob({
+        title,
+        description,
+        userId: String(context.userId),
       });
     },
     register: async (_, { name, email, password }) => {
       const hashed = await bcrypt.hash(password, 10);
 
-      const user = await prisma.user.create({
-        data: { name, email, password: hashed },
+      const user = await dataStore.createUser({
+        name,
+        email,
+        password: hashed,
       });
 
+      if (!SECRET) {
+        throw new Error('MY_SECRET is not set');
+      }
       const token = jwt.sign({ userId: user.id }, SECRET);
 
       return { token, user };
     },
 
     login: async (_, { email, password }) => {
-      const user = await prisma.user.findUnique({
-        where: { email },
-        select: {
-          id: true,
-          name: true,
-          email: true,
-          password: true,
-        },
-      });
+      const user = await dataStore.findUserByEmail(email);
       if (!user) throw new Error('User not found');
       if (!user.password) throw new Error('Password not set');
 
       const valid = await bcrypt.compare(password, user.password);
       if (!valid) throw new Error('Invalid password');
 
+      if (!SECRET) {
+        throw new Error('MY_SECRET is not set');
+      }
       const token = jwt.sign({ userId: user.id }, SECRET);
 
       return { token, user };
