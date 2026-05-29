@@ -8,7 +8,7 @@ import type {
 } from './types.js';
 
 const prisma = new PrismaClient({
-  adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL }),
+  adapter: new PrismaPg({ connectionString: process.env.POSTGRES_URL }),
 });
 
 function mapUser(user: {
